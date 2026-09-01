@@ -99,6 +99,8 @@ export default function Home() {
   const [rawInput, setRawInput] = useState("");
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [routingProgress, setRoutingProgress] = useState(0);
+  const progressTimer = useRef(null);
   const [status, setStatus] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -417,6 +419,13 @@ export default function Home() {
     if (!text) return setStatus("Add or dictate at least one task.");
     setLoading(true);
     setStatus("");
+    setRoutingProgress(3);
+    // Climbs quickly at first, then slows as it approaches 90% — never claims
+    // 100% until the real response actually arrives, since there's no true
+    // step-by-step progress to report from a single AI call.
+    progressTimer.current = setInterval(() => {
+      setRoutingProgress((p) => (p < 90 ? p + Math.max(1, (90 - p) * 0.12) : p));
+    }, 150);
     try {
       const now = new Date();
       const systemInstruction = `Current date and time: ${now.toString()}. You'll get raw text — often a spoken, run-on paragraph mixing several unrelated tasks with no clear breaks (e.g. "post the campaign, also fix that login bug, and I need to hand off the invoice to Priya"). First, split it into distinct, individual actionable tasks, each as a clean short sentence in the user's own words. Then, for each task, apply the Eisenhower Matrix — quadrant is one of do_now/schedule/delegate/delete — pick a department category from exactly this list: ${CATEGORIES.join(", ")} — and pick a priority from exactly this list: ${PRIORITIES.join(", ")} (how much this matters, independent of urgency). If the task mentions or implies a specific time (e.g. "at 5am", "tomorrow", "tonight", "next Monday at 3pm"), compute the actual date/time relative to the current date/time given above and put it as a precise ISO 8601 datetime string (e.g. "2026-08-20T05:00:00") in a field called when_iso. If no specific time is mentioned, set when_iso to null. Also include a short reason and a meta field (a short human-readable version of the deadline/schedule time/delegate name, or null). Respond ONLY with JSON, no commentary: {"tasks":[{"text":"...","quadrant":"do_now","category":"Marketing","priority":"High","reason":"...","meta":"...","when_iso":"..."}]}`;
@@ -449,6 +458,9 @@ export default function Home() {
     } catch (e) {
       setStatus("Triage failed: " + e.message);
     } finally {
+      clearInterval(progressTimer.current);
+      setRoutingProgress(100);
+      setTimeout(() => setRoutingProgress(0), 400);
       setLoading(false);
     }
   }
@@ -849,9 +861,25 @@ export default function Home() {
           <button
             onClick={runTriage}
             disabled={loading}
-            style={{ width: isDesktop ? "auto" : "100%", background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            style={{
+              width: isDesktop ? "auto" : "100%", minWidth: isDesktop ? 180 : undefined,
+              background: loading ? "#A0A3AD" : "linear-gradient(135deg, #6366F1, #8B5CF6)",
+              color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontSize: 13, fontWeight: 600,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              position: "relative", overflow: "hidden",
+            }}
           >
-            <Zap size={13} /> {loading ? "Routing…" : "Smart Routing"}
+            {loading && (
+              <div
+                style={{
+                  position: "absolute", left: 0, top: 0, bottom: 0, width: `${routingProgress}%`,
+                  background: "linear-gradient(135deg, #6366F1, #8B5CF6)", transition: "width 0.15s ease",
+                }}
+              />
+            )}
+            <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 6, color: "#fff" }}>
+              <Zap size={13} /> {loading ? `Routing… ${Math.round(routingProgress)}%` : "Smart Routing"}
+            </span>
           </button>
           {showFeedback && (
             <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 10, padding: "8px 12px" }}>
