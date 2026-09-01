@@ -44,9 +44,30 @@ type in the box. Then tap **Smart Routing** to sort everything.
   Calendar, at exactly that time.
 - 🟠 **Delegate** — someone else should handle this. Type their email or
   phone number, then tap **Send** (emails them for real, through your own
-  Gmail) or **WhatsApp** (opens a pre-filled message, one tap to send). If
-  they also sign into this same app, the task shows up on their side too,
-  and they can reply straight back to you.
+  Gmail) or **WhatsApp** (opens a pre-filled message, one tap to send).
+
+**Delegating inside the app itself**
+Sending an email is one half of it — the other half is what happens if the
+person you delegated to *also* uses this app. When you tap Send, the task
+is also filed as an **assignment** tied to their email address. The next
+time they sign in (on this same app, with that same Google account), it
+shows up for them under a new **"Assigned to you"** panel near the top —
+even if you delegated it before they'd ever signed in themselves.
+
+From there, they can:
+- Tap **"+ Add to my board"** to pull it straight into their own Do It Now
+  column as a real task — from that point it's fully theirs: they can drag
+  it to Schedule, push it to their own calendar, re-prioritize it, whatever
+  fits their day. It's no longer tied to how *you* classified it.
+- Type a quick reply and hit **Reply** — you'll then see it show up on your
+  side, in a **"Replies to what you sent"** panel.
+- Tick it off directly from the "Assigned to you" list if it's already
+  done, without adding it to their board at all.
+
+This isn't a live chat (there's no typing indicator or instant push) — the
+app quietly checks for new assignments every 30 seconds while it's open,
+so it's close to real-time without needing more complex infrastructure.
+Think of it as lightweight task handoff with a reply, not a messenger app.
 - 🟣 **Delete** — low-value, doesn't need doing. Just here as a reminder to
   let it go.
 
@@ -55,9 +76,12 @@ Either drag a card with your mouse or finger, or use the small **"Move
 to:"** icons at the bottom of every card — one tap moves it instantly,
 no dragging required.
 
-**Marking something done**
-Tap the checkbox on any card. If it had been pushed to your calendar, the
-event is automatically removed too.
+**✅ Marking something done**
+Tap the checkbox on any card — it moves out of its box entirely and into a
+collapsed **"Completed"** row at the bottom of the page (tap it to expand).
+From there you can **Restore** it back to where it was, or delete it for
+good. If the task had been pushed to your calendar, the event is
+automatically removed too.
 
 **Keyboard shortcuts (laptop only)**
 - Tap **Control** alone to start/stop dictating.

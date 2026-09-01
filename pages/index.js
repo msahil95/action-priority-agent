@@ -83,6 +83,13 @@ function defaultScheduleTime() {
 
 export default function Home() {
   const { data: session } = useSession();
+
+  useEffect(() => {
+    if (session?.error === "RefreshAccessTokenError") {
+      showToast("Google connection expired — please sign in again");
+      signIn("google");
+    }
+  }, [session]);
   const [apiKey, setApiKey] = useState("");
   const [draftKey, setDraftKey] = useState("");
   const [provider, setProvider] = useState("gemini");
@@ -94,6 +101,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState(false);
   const [assignedToMe, setAssignedToMe] = useState([]);
   const [sentByMe, setSentByMe] = useState([]);
@@ -492,6 +500,9 @@ export default function Home() {
     const t = tasks.find((x) => x.id === id);
     if (t && !t.done && t.eventId) cancelCalendarEvent(t);
   }
+  function deleteTaskPermanently(id) {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+  }
   function setWhenISO(id, iso) {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, whenISO: iso } : t)));
   }
@@ -889,7 +900,7 @@ export default function Home() {
         {ORDER.map((key) => {
           const q = QUADRANTS[key];
           const Icon = q.icon;
-          const items = visibleTasks.filter((t) => t.quadrant === key);
+          const items = visibleTasks.filter((t) => t.quadrant === key && !t.done);
           return (
             <div key={key} data-quadrant={key} style={{ borderRadius: 14, overflow: "hidden", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ background: q.color, padding: "10px 13px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1042,6 +1053,32 @@ export default function Home() {
           );
         })}
       </div>
+
+      {tasks.some((t) => t.done) && (
+        <div style={{ marginTop: 4 }}>
+          <button
+            onClick={() => setShowCompleted((s) => !s)}
+            style={{ display: "flex", alignItems: "center", gap: 6, border: "none", background: "none", fontSize: 12, fontWeight: 700, color: theme.subtext, cursor: "pointer", padding: "6px 2px" }}
+          >
+            <Check size={13} /> Completed ({tasks.filter((t) => t.done).length}) {showCompleted ? "▲" : "▼"}
+          </button>
+          {showCompleted && (
+            <div style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, padding: 10 }}>
+              {tasks.filter((t) => t.done).map((t) => (
+                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 4px", borderBottom: `1px solid ${theme.border}` }}>
+                  <div style={{ flex: 1, fontSize: 12.5, color: theme.subtext, textDecoration: "line-through" }}>{t.text}</div>
+                  <button onClick={() => toggleDone(t.id)} title="Restore" style={{ fontSize: 10.5, border: `1px solid ${theme.border}`, background: "transparent", color: theme.text, borderRadius: 6, padding: "3px 7px" }}>
+                    Restore
+                  </button>
+                  <button onClick={() => deleteTaskPermanently(t.id)} title="Delete permanently" style={{ fontSize: 10.5, border: "1px solid #D6454544", background: "transparent", color: "#D64545", borderRadius: 6, padding: "3px 7px" }}>
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <style>{`
         .pulsering { position: absolute; inset: -8px; border-radius: 50%; border: 2px solid #D6454566; animation: pulse 1.4s ease-out infinite; }
