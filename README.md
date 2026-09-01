@@ -1,54 +1,149 @@
-# Action & Priority Intelligence Agent (open source, free to run)
+# Action & Priority Intelligence Agent
 
-Sorts your tasks into the Eisenhower Matrix using Claude, then lets you push
-"Schedule" tasks straight to Google Calendar.
+Your AI-powered productivity co-pilot. Talk or type your tasks, and it sorts
+them into the Eisenhower Matrix — Do It Now, Schedule, Delegate, Delete —
+then lets you push them straight to your Google Calendar or hand them off
+to someone else, all in one place.
 
-## Why this costs you $0 as the owner
+Free to run for anyone — see "How it stays free" below.
 
-- **BYOK (bring your own key):** every visitor pastes their own free Google
-  AI (Gemini) API key. It's stored only in their browser (`localStorage`),
-  sent straight from their browser to Google. Your server never sees it,
-  never pays for it. Gemini's free tier needs no credit card — 1,500
-  requests/day on Gemini Flash.
-- **Hosting:** Vercel free tier.
-- **Auth:** Google OAuth, "Testing" mode (free, no review needed, capped at
-  100 users — enough to launch and prove it out).
+---
 
-## Stack
+## Getting started (first time)
 
+**1. Sign in with Google**
+Tap **Sign in** in the "Connect your tools" panel at the top. Google will
+show a screen saying *"Google hasn't verified this app"* — that's expected
+for a small independent tool like this one, not a sign of danger. Tap
+**Advanced**, then **"Go to Action & Priority Agent (unsafe)"** to continue.
+This connects your Calendar and Gmail so the app can act on your behalf.
+
+**2. Add your free AI key**
+Under "Google Gemini (free)," tap **Get Key** — this opens Google's AI
+Studio in a new tab. Sign in with any Google account, click **"Create API
+key,"** and copy it (no credit card, no cost, ever, within the free daily
+limit). Paste it into the key field back in the app, and tap **Save**.
+
+That's it — setup is done, and it's remembered on this device from now on.
+
+---
+
+## How it works
+
+**🎤 Dictate or type**
+Tap the mic and talk naturally — even one long sentence mixing several
+different tasks works fine ("email Sam about the invoice, also I need to
+pick up the kit at 2, and someone should review the landing page"). Or just
+type in the box. Then tap **Smart Routing** to sort everything.
+
+**The four boxes:**
+
+- 🔴 **Do It Now** — important and urgent. Needs your attention today.
+- 🟢 **Schedule** — important, but not urgent. Each card gets a date/time
+  picker — set it and tap **Calendar** to add it straight to your Google
+  Calendar, at exactly that time.
+- 🟠 **Delegate** — someone else should handle this. Type their email or
+  phone number, then tap **Send** (emails them for real, through your own
+  Gmail) or **WhatsApp** (opens a pre-filled message, one tap to send). If
+  they also sign into this same app, the task shows up on their side too,
+  and they can reply straight back to you.
+- 🟣 **Delete** — low-value, doesn't need doing. Just here as a reminder to
+  let it go.
+
+**Moving a task between boxes**
+Either drag a card with your mouse or finger, or use the small **"Move
+to:"** icons at the bottom of every card — one tap moves it instantly,
+no dragging required.
+
+**Marking something done**
+Tap the checkbox on any card. If it had been pushed to your calendar, the
+event is automatically removed too.
+
+**Keyboard shortcuts (laptop only)**
+- Tap **Control** alone to start/stop dictating.
+- Tap **Option** (Mac) / **Alt** (Windows) alone to run Smart Routing.
+
+---
+
+## How it stays free
+
+- **You bring your own AI key** — Gemini's free tier, or your own paid
+  Claude/OpenAI key if you prefer. Either way, nothing routes through the
+  app owner's account or billing.
+- **Hosting** runs on Vercel's free tier.
+- **Calendar and Gmail** actions use your own Google login — free, with
+  generous daily limits.
+
+---
+
+## For developers / self-hosting
+
+### Stack
 - Next.js (React + API routes in one app)
-- NextAuth.js — handles Google OAuth/login for you
-- Google Calendar API — via the user's own Google login token
-- Google Gemini API — called directly from the browser with the user's own key
+- NextAuth.js for Google sign-in
+- Google Calendar & Gmail APIs, via the signed-in user's own token
+- Gemini / Claude / OpenAI APIs, via a bring-your-own-key model
+- Supabase (free tier) for saved tasks, delegation, and usage stats
 
-## Getting a free Gemini API key (for testing, and for anyone using the site)
-
-1. Go to **aistudio.google.com** and sign in with any Google account.
-2. Click "Get API key" → "Create API key" — no billing, no credit card.
-3. Copy the key and paste it into the app's key field at the top.
-
-Note: this app calls `gemini-3.6-flash`. Google retires model versions over
-time — if requests start failing with a "model no longer available" error,
-open `pages/api/gemini/triage.js`, find `gemini-3.6-flash`, and swap in
-whatever Google's current stable Flash model is at aistudio.google.com.
-
-## Local setup
-
+### Local setup
 1. `npm install`
-2. Copy `.env.example` to `.env.local` and fill in your Google OAuth
-   credentials (free, from console.cloud.google.com — create a project,
-   enable Calendar API, create OAuth client ID, add
+2. Copy `.env.example` to `.env.local` and fill in your own Google OAuth
+   credentials (console.cloud.google.com → enable Calendar API and Gmail
+   API → Credentials → create an OAuth client ID → add
    `http://localhost:3000/api/auth/callback/google` as a redirect URI).
 3. `npm run dev`
 
-## Deploy for free
+### Database setup (Supabase, free tier)
+Run once in the Supabase SQL editor:
 
-1. Push this repo to GitHub (public repo = your "open source" part).
-2. Import it into Vercel (vercel.com), connect the GitHub repo.
-3. Add the same `.env` values in Vercel's project settings.
-4. Add your Vercel URL's callback (`https://yourapp.vercel.app/api/auth/callback/google`)
-   to the Google OAuth client's redirect URIs.
-5. Ship it. First 100 Google logins work immediately in Testing mode.
+```sql
+create table if not exists users (
+  email text primary key,
+  name text,
+  first_seen timestamptz default now(),
+  last_seen timestamptz default now()
+);
+
+create table if not exists user_tasks (
+  user_email text primary key,
+  tasks jsonb default '[]'::jsonb,
+  updated_at timestamptz default now()
+);
+
+create table if not exists feedback (
+  id bigint generated always as identity primary key,
+  user_email text,
+  rating text,
+  created_at timestamptz default now()
+);
+
+create table if not exists assignments (
+  id bigint generated always as identity primary key,
+  from_email text not null,
+  to_email text not null,
+  task_text text not null,
+  reason text,
+  status text default 'pending',
+  reply text,
+  created_at timestamptz default now()
+);
+```
+
+### Deploying
+1. Push to a GitHub repo (public or private — both work fine on the free
+   tiers used here).
+2. Import into Vercel, add all the same environment variables from
+   `.env.local`, except `NEXTAUTH_URL` becomes your live Vercel address.
+3. Add that live address to Google Cloud's OAuth client (both Authorized
+   JavaScript origins and Authorized redirect URIs).
+4. Google Auth Platform → Audience → switch Publishing status from Testing
+   to In production once you want anyone (not just accounts you've
+   manually added) to be able to sign in.
+
+### Admin stats
+Visit `/admin` on your deployed site, enter the `ADMIN_SECRET` you set in
+your environment variables, to see registered users, active users, and
+satisfaction (👍/👎) counts.
 
 ## License
 
