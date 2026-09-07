@@ -142,6 +142,15 @@ export default function Home() {
   const [extraConnectors, setExtraConnectors] = useState([]);
   const [dark, setDark] = useState(false);
 
+  // The app's content box is centered with margins on wide screens — those
+  // margins are the actual page background, separate from the box itself.
+  // Without this, dark mode only colored the box, leaving white strips on
+  // either side on desktop.
+  useEffect(() => {
+    document.body.style.background = dark ? "#14161B" : "#F5F7F6";
+    document.documentElement.style.background = dark ? "#14161B" : "#F5F7F6";
+  }, [dark]);
+
   const recognitionRef = useRef(null);
   const listeningRef = useRef(false);
   const baseTextRef = useRef("");
