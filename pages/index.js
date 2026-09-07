@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
-import { Zap, CalendarClock, Users, Trash2, Calendar, KeyRound, Mic, Square, GripVertical, Pencil, Check, Mail, ExternalLink, Plus, Moon, Sun, User, ClipboardList, Keyboard } from "lucide-react";
+import { Zap, CalendarClock, Users, Trash2, Calendar, KeyRound, Mic, Square, GripVertical, Pencil, Check, Mail, ExternalLink, Plus, Moon, Sun, User, ClipboardList, Keyboard, Clock } from "lucide-react";
 
 const QUADRANTS = {
-  do_now: { title: "DO IT NOW", sub: "Important + Urgent", icon: Zap, color: "#D64545", tint: "#FCEEEE", metaLabel: "Deadline" },
-  schedule: { title: "SCHEDULE", sub: "Important + Not Urgent", icon: CalendarClock, color: "#1F8A70", tint: "#E9F5F1", metaLabel: "When" },
-  delegate: { title: "DELEGATE", sub: "Not Important + Urgent", icon: Users, color: "#C7791F", tint: "#FBF1E4", metaLabel: "To whom" },
-  delete: { title: "DELETE", sub: "Not Important + Not Urgent", icon: Trash2, color: "#6B4FA0", tint: "#F1EDF8", metaLabel: "Why" },
+  do_now: { title: "DO IT NOW", sub: "Important + Urgent", icon: Zap, color: "#D64545", tint: "#FCEEEE", darkTint: "#2A1B1B", metaLabel: "Deadline" },
+  schedule: { title: "SCHEDULE", sub: "Important + Not Urgent", icon: CalendarClock, color: "#1F8A70", tint: "#E9F5F1", darkTint: "#132420", metaLabel: "When" },
+  delegate: { title: "DELEGATE", sub: "Not Important + Urgent", icon: Users, color: "#C7791F", tint: "#FBF1E4", darkTint: "#2A2114", metaLabel: "To whom" },
+  delete: { title: "DELETE", sub: "Not Important + Not Urgent", icon: Trash2, color: "#6B4FA0", tint: "#F1EDF8", darkTint: "#221A2E", metaLabel: "Why" },
 };
 const ORDER = ["do_now", "schedule", "delegate", "delete"];
 
@@ -102,6 +102,8 @@ export default function Home() {
   const [routingProgress, setRoutingProgress] = useState(0);
   const progressTimer = useRef(null);
   const [status, setStatus] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+  const cooldownTick = useRef(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState(false);
@@ -408,6 +410,22 @@ export default function Home() {
     };
   }, []);
 
+  // Counts down a short-term rate-limit cooldown, once one is detected
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    cooldownTick.current = setInterval(() => {
+      setCooldown((c) => (c > 1 ? c - 1 : 0));
+    }, 1000);
+    return () => clearInterval(cooldownTick.current);
+  }, [cooldown > 0]);
+
+  function startCooldownFromError(message) {
+    const match = message.match(/retry in ([\d.]+)\s*s/i);
+    const seconds = match ? Math.ceil(parseFloat(match[1])) : 20;
+    const isRateLimit = /rate limit|quota exceeded|429|too many requests/i.test(message);
+    if (isRateLimit) setCooldown(seconds);
+  }
+
   async function runTriage() {
     if (listening) {
       recognitionRef.current && recognitionRef.current.stop();
@@ -457,6 +475,7 @@ export default function Home() {
       setRawInput("");
     } catch (e) {
       setStatus("Triage failed: " + e.message);
+      startCooldownFromError(e.message);
     } finally {
       clearInterval(progressTimer.current);
       setRoutingProgress(100);
@@ -858,15 +877,20 @@ export default function Home() {
             style={{ width: "100%", padding: 10, border: `1px solid ${theme.border}`, borderRadius: 10, fontSize: 13, boxSizing: "border-box", marginBottom: 8, background: theme.inputBg, color: theme.text }}
           />
           {status && <div style={{ fontSize: 12, color: "#E24B4A", marginBottom: 6 }}>{status}</div>}
+          {cooldown > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#C7791F", marginBottom: 6, fontWeight: 600 }}>
+              <Clock size={13} /> Free tier's short-term limit hit — try again in {cooldown}s
+            </div>
+          )}
           <button
             onClick={runTriage}
-            disabled={loading}
+            disabled={loading || cooldown > 0}
             style={{
               width: isDesktop ? "auto" : "100%", minWidth: isDesktop ? 180 : undefined,
-              background: loading ? "#A0A3AD" : "linear-gradient(135deg, #6366F1, #8B5CF6)",
+              background: cooldown > 0 ? "#C7CBCE" : loading ? "#A0A3AD" : "linear-gradient(135deg, #6366F1, #8B5CF6)",
               color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontSize: 13, fontWeight: 600,
               display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              position: "relative", overflow: "hidden",
+              position: "relative", overflow: "hidden", cursor: cooldown > 0 ? "not-allowed" : "pointer",
             }}
           >
             {loading && (
@@ -878,7 +902,11 @@ export default function Home() {
               />
             )}
             <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 6, color: "#fff" }}>
-              <Zap size={13} /> {loading ? `Routing… ${Math.round(routingProgress)}%` : "Smart Routing"}
+              {cooldown > 0 ? (
+                <><Clock size={13} /> Wait {cooldown}s</>
+              ) : (
+                <><Zap size={13} /> {loading ? `Routing… ${Math.round(routingProgress)}%` : "Smart Routing"}</>
+              )}
             </span>
           </button>
           {showFeedback && (
@@ -942,7 +970,7 @@ export default function Home() {
                 </span>
               </div>
 
-              <div style={{ background: q.tint, padding: 8, minHeight: isDesktop ? 120 : undefined }}>
+              <div style={{ background: dark ? q.darkTint : q.tint, padding: 8, minHeight: isDesktop ? 120 : undefined }}>
                 {items.length === 0 && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 6px" }}>
                     <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${q.color}22`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
