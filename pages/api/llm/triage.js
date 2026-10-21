@@ -1,6 +1,25 @@
 // One proxy, three providers. All calls happen server-side, so none of
 // them hit browser CORS restrictions. The key passes through per-request —
 // never stored, never logged.
+// Retry on temporary provider-side failures (overloaded / 5xx). Waits 1s, then 2s.
+const RETRY_STATUSES = [500, 502, 503, 504];
+async function fetchWithRetry(url, options, retries = 2) {
+  let r = await fetch(url, options);
+  for (let i = 0; i < retries && RETRY_STATUSES.includes(r.status); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
+    r = await fetch(url, options);
+  }
+  return r;
+}
+
+// Friendly text when a provider is still busy after retries.
+function busyMessage(name) {
+  return `${name} is busy right now (high demand on their side, not a problem with your key). Please try again in a minute.`;
+}
+
+// Give Vercel room for the retries.
+export const config = { maxDuration: 30 };
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
@@ -14,7 +33,7 @@ export default async function handler(req, res) {
     let usage = null; // { limit, remaining, resetAt } — real numbers from the provider, when available
 
     if (provider === "gemini") {
-      const r = await fetch(
+      const r = await fetchWithRetry(
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
         {
           method: "POST",
@@ -27,13 +46,16 @@ export default async function handler(req, res) {
         }
       );
       const data = await r.json();
-      if (!r.ok) return res.status(r.status).json({ error: data.error?.message || "Gemini request failed" });
+      if (!r.ok) {
+        if (RETRY_STATUSES.includes(r.status) || r.status === 529) return res.status(503).json({ error: busyMessage("Gemini") });
+        return res.status(r.status).json({ error: data.error?.message || "Gemini request failed" });
+      }
       raw = data.candidates[0].content.parts[0].text;
       // Gemini doesn't expose remaining-quota headers, so no real `usage` here — client self-tracks against the known 1,500/day free cap.
     }
 
     else if (provider === "anthropic") {
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
+      const r = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -48,7 +70,10 @@ export default async function handler(req, res) {
         }),
       });
       const data = await r.json();
-      if (!r.ok) return res.status(r.status).json({ error: data.error?.message || "Claude request failed" });
+      if (!r.ok) {
+        if (RETRY_STATUSES.includes(r.status) || r.status === 529) return res.status(503).json({ error: busyMessage("Claude") });
+        return res.status(r.status).json({ error: data.error?.message || "Claude request failed" });
+      }
       raw = data.content.find((b) => b.type === "text").text;
 
       const limit = r.headers.get("anthropic-ratelimit-tokens-limit");
@@ -58,7 +83,7 @@ export default async function handler(req, res) {
     }
 
     else if (provider === "openai") {
-      const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      const r = await fetchWithRetry("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
@@ -71,7 +96,10 @@ export default async function handler(req, res) {
         }),
       });
       const data = await r.json();
-      if (!r.ok) return res.status(r.status).json({ error: data.error?.message || "OpenAI request failed" });
+      if (!r.ok) {
+        if (RETRY_STATUSES.includes(r.status) || r.status === 529) return res.status(503).json({ error: busyMessage("OpenAI") });
+        return res.status(r.status).json({ error: data.error?.message || "OpenAI request failed" });
+      }
       raw = data.choices[0].message.content;
 
       const limit = r.headers.get("x-ratelimit-limit-tokens");
